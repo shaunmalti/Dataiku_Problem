@@ -403,11 +403,13 @@ First the minority class (>50,000) were upsampled to be of the same length as th
 following results.
 
 (Original data)
+
 | Logistic Regression | Decision Tree | Random Forest |
 |---------------------|---------------|---------------|
-| 87.245              | 93.218        | 95.141        |
+| 87.245               | 93.218        | 95.141        |
 
 (With engineered features)
+
 | Logistic Regression | Decision Tree | Random Forest |
 |---------------------|---------------|---------------|
 | 87.426              | 93.142         | 95.07        |
@@ -421,11 +423,13 @@ The same was done but this time reducing the majority class to be of the same le
 12,000 samples each).
 
 (Original data)
+
 | Logistic Regression | Decision Tree | Random Forest |
 |---------------------|---------------|---------------|
 | 85.63               | 81.51         | 85.84         |
 
 (With engineered features)
+
 | Logistic Regression | Decision Tree | Random Forest |
 |---------------------|---------------|---------------|
 | 84.31               | 81.328        | 85.823        |
@@ -438,6 +442,7 @@ Finally a combination of both was used, upsampling the minority class while down
 they the lengths are the same and in between the original lengths.
 
 (With engineered features)
+
 | Logistic Regression | Decision Tree | Random Forest |
 |---------------------|---------------|---------------|
 | 86.45               | 91.416        | 94.19         |
