@@ -48,12 +48,11 @@ def checkRemoveMissingData(data):
     testData[0] = testData[0].replace(' Not in universe', np.nan)
 
     # from this largest lack of testData[0] is in EducationLastWk, LabourUnion, UnempReason, PrevReg, PrevState, MigResSunbelt, VeteranAdmQ > 90% are nulls
-    nullSeries = testData[0].isnull().sum()/len(testData[0]) * 100
-
-    for item in nullSeries.iteritems():
-        if item[1] >= 90:
-            data[0].drop([item[0]], axis=1, inplace=True)
-            data[1].drop([item[0]], axis=1, inplace=True)
+    # nullSeries = testData[0].isnull().sum()/len(testData[0]) * 100
+    # for item in nullSeries.iteritems():
+    #     if item[1] >= 90:
+    #         data[0].drop([item[0]], axis=1, inplace=True)
+    #         data[1].drop([item[0]], axis=1, inplace=True)
     return data[0], data[1]
 
 def downSampleMajorityClass(data, amount):
@@ -289,12 +288,7 @@ def correlationPlot(data):
     # hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values,
     #                  xticklabels=cols.values)
     # plt.show()
-
-    corr_target = abs(corr['Target'])
-
-    corr_ww = corr['WeeksWorked']
-    print('WEEKS WORKED CORR')
-    print(corr_ww.sort_values())
+    # exit()
     return
 
 def concatDf(train, test):
@@ -463,14 +457,17 @@ def xgBoost(x_data, y_data, x_test, y_test):
 
 def main():
     train, test = importData()
-    # train, test = checkRemoveMissingData([train, test])
+    # Removing data that has >90% missing (' ?' or ' not in universe') values
+    train, test = checkRemoveMissingData([train, test])
     # describe(train)
     # train, test = binningRace(train, test)
+    # print(train.isnull().sum())
 
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
     # train, test = aggregateGains([train, test])
+
 
     # train, test = dropMissingDataCols(train, test)
 
