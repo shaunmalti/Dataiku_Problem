@@ -48,11 +48,11 @@ def checkRemoveMissingData(data):
     testData[0] = testData[0].replace(' Not in universe', np.nan)
 
     # from this largest lack of testData[0] is in EducationLastWk, LabourUnion, UnempReason, PrevReg, PrevState, MigResSunbelt, VeteranAdmQ > 90% are nulls
-    # nullSeries = testData[0].isnull().sum()/len(testData[0]) * 100
-    # for item in nullSeries.iteritems():
-    #     if item[1] >= 90:
-    #         data[0].drop([item[0]], axis=1, inplace=True)
-    #         data[1].drop([item[0]], axis=1, inplace=True)
+    nullSeries = testData[0].isnull().sum()/len(testData[0]) * 100
+    for item in nullSeries.iteritems():
+        if item[1] >= 90:
+            data[0].drop([item[0]], axis=1, inplace=True)
+            data[1].drop([item[0]], axis=1, inplace=True)
     return data[0], data[1]
 
 def downSampleMajorityClass(data, amount):
@@ -78,7 +78,7 @@ def aggregateGains(data):
     for datum in data:
         datum['GainsOverall'] = datum['CapGains'] + datum['StockDiv'] - datum['CapLosses']
         datum.drop(gainCols, axis=1, inplace=True)
-        # datum['WageYr'] = datum['Wage'] * datum['WeeksWorked']
+        # datum['WageYr'] = datum['Wage'] * datum['WeeksWorked'] * 40
         # datum.drop(['Wage', 'WeeksWorked'], axis=1, inplace=True)
     return data[0], data[1]
 
@@ -117,7 +117,7 @@ def doMCA(data):
 
 
 def replaceQMarks(data):
-    QCols = ['MigCodeMSA', 'MigCodeRegDiff', 'MigCodeRegSame', 'MigResSunbelt', 'FatherBirthCountry', 'MotherBirthCountry', 'SelfBirthCountry', 'PrevState']
+    QCols = ['MigCodeMSA', 'MigCodeRegDiff', 'MigCodeRegSame', 'FatherBirthCountry', 'MotherBirthCountry', 'SelfBirthCountry']
     # QCols = ['MigCodeMSA', 'MigCodeRegDiff', 'MigCodeRegSame', 'FatherBirthCountry', 'MotherBirthCountry', 'SelfBirthCountry']
     for datum in data:
         for col in QCols:
@@ -495,9 +495,9 @@ def main():
     x_test = test.drop(['Target'], axis=1)
 
     # ranking features via
-    shapRanking(x_data, y_data)
+    # shapRanking(x_data, y_data)
     # featureRanking(x_data, y_data)
-    exit()
+    # exit()
 
     lightGBMModel(x_data, y_data, x_test, y_test)
     # xgBoost(x_data, y_data, x_test, y_test)
@@ -571,7 +571,6 @@ def logReg(x_data, y_data, x_test, y_test):
 def decTree(x_data, y_data, x_test, y_test):
     # next try with decision tree
     d_t = DecisionTreeClassifier()
-    # cross val
     d_t.fit(x_data, y_data)
     preds = d_t.predict(x_test)
     print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)
