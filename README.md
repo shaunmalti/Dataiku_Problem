@@ -20,50 +20,24 @@ After this, an initial describing of the data was done to see the amount of miss
 the class split. The describe `df.describe()` produced the following results. On further inspection the data was 
 found to contain many instances of `not in universe` or `?` which were then understood as being the missing values.
 
-| FeatureName          | Initial Number Missing | Actual Missing |
+| FeatureName          | Initial Number Missing | Actual Missing % |
 |----------------------|------------------------|----------------|
-| Age                  | 0                      | 0              |
-| BusinessOwner        | 0                      | 0              |
-| CapGains             | 0                      | 0              |
-| CapLosses            | 0                      | 0              |
-| Cit                  | 0                      | 0              |
-| Education            | 0                      | 0              |
 | EducationLastWk      | 0                      | 93.694962      |
 | FamMembersU18        | 0                      | 72.288408      |
 | FatherBirthCountry   | 0                      | 3.364524       |
-| FullPartStat         | 0                      | 0              |
-| HispOrig             | 0                      | 0              |
-| HouseholdFamStat     | 0                      | 0              |
-| HouseholdSummaryStat | 0                      | 0              |
-| HouseLive1Yr         | 0                      | 0              |
-| IndustryCode         | 0                      | 0              |
-| IndustryCodeString   | 0                      | 0              |
-| InstanceWeight       | 0                      | 0              |
 | LabourUnion          | 0                      | 90.445212      |
-| MaritalStat          | 0                      | 0              |
 | MigCodeMSA           | 0                      | 50.726984      |
 | MigCodeRegDiff       | 0                      | 50.726984      |
 | MigCodeRegSame       | 0                      | 50.726984      |
 | MigResSunbelt        | 0                      | 92.094646      |
 | MotherBirthCountry   | 0                      | 3.066814       |
-| NumWorkersEmployer   | 0                      | 0              |
-| OccupationCode       | 0                      | 0              |
 | OccupationCodeString | 0                      | 50.462353      |
 | PrevReg              | 0                      | 92.094646      |
 | PrevState            | 0                      | 92.449492      |
-| Race                 | 0                      | 0              |
 | SelfBirthCountry     | 0                      | 1.700556       |
-| Sex                  | 0                      | 0              |
-| StockDiv             | 0                      | 0              |
-| Target               | 0                      | 0              |
-| TaxFilerStat         | 0                      | 0              |
 | UnempReas            | 0                      | 96.957744      |
 | VeteranAdmQ          | 0                      | 99.005628      |
-| VeteranBen           | 0                      | 0              |
-| Wage                 | 0                      | 0              |
-| WeeksWorked          | 0                      | 0              |
 | WorkerClas           | 0                      | 50.242328      |
-| Yr                   | 0                      | 0              |
 
 The amount of missing data seen in certain columns will be revisited later on in this README.
 
@@ -564,4 +538,168 @@ Two new models were added, namely Microsoft's LightGBM and XGBoost Gradient Boos
 being tree based, some of the hyperparameters such as `n_estimators` and `max_depth` were carried over from the random 
 forest model mentioned previously. These were done using the python `lightgbm` and `xgboost` packages.
 
+#### LightGBM Implementation
+
+```python
+def lightGBMModel(x_data, y_data, x_test, y_test):
+    # using lightgbm model to compare accuracy with normal rand forest
+    train_x, valid_x, train_y, valid_y = train_test_split(
+        x_data, y_data, test_size=0.33)
+
+    train_data = lgb.Dataset(train_x, label=train_y)
+    valid_data = lgb.Dataset(valid_x, label=valid_y)
+
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'l2', 'l1'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        'feature_fraction': 0.9,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 5,
+        'verbose': 0,
+        'max_depth': 28,
+        'num_estimators': 800
+    }
+
+    print('Starting training...')
+    # train
+    gbm = lgb.train(params,
+                    train_data,
+                    num_boost_round=2000,
+                    valid_sets=valid_data,
+                    early_stopping_rounds=50)
+
+    print('Starting predicting...')
+    # predict
+    y_prob = gbm.predict(x_test.values, num_iteration=gbm.best_iteration)
+    y_pred = [round(x) for x in y_prob]
+    print('Accuracy LGBM: ', (accuracy_score(y_pred, y_test)) * 100)
+```
+
+#### XGBoost Implementation
+```python
+def xgBoost(x_data, y_data, x_test, y_test):
+    # using model with tuned hyperparams (tuned for random forest classifier)
+    # produces better results ~0.5% better but takes substantially longer to compute
+    # model = XGBClassifier(n_estimators=800, max_depth=28)
+
+    # using base model
+    model = XGBClassifier()
+    model.fit(x_data, y_data)
+    y_pred = model.predict(x_test)
+    print('Accuracy XGBoost: ', (accuracy_score(y_pred, y_test)) * 100)
+```
+
+Which produced the following results:
+
+| LightGBM | XGBoost |
+|---------------------|---------------|
+| 95.714               |    95.653     |
+
+The best results seen so far!
+
+#### Stacked Regression
+
+Another model was tried which included ensembling different regression techniques and stacking them, such that a first 
+layer of regressors feeds their results to another regressor that uses the previous outputs as features. This can be 
+better understood by looking at the following graphic.
+
+![image](./plots/stacked.jpg)
+
+The implementation for this model can be seen in the `AveragingModel.py` file, which was carried over from a previous 
+project. The stacked model contained an Random Forest, Lasso Regressor, Gradient Boosting Regressor and normal Logistic
+Regressor
+
+| Stacked Model |
+|---------------------|
+| 94.736               |
+
+This needs to be investigated and tuned further.
+
+### Another Final Look at the Statistics
+
+A final metric was looked at to again rank features and their importance, this being the SHAP ranking. This ranking (
+SHaplet Additive exPlanations) measures the contributions of the predictors via Shapley values which are the average of 
+the marginal contributions across all permutations.
+
+Initially all features were ranking against one another.
+
+![image](./plots/shap_summary.png)
+
+This graph has a lot of information, ranking features from most important at the top, together with the value of each feature 
+within its distribution. For Age, for example, we can see how a large number of points are bunched up towards the right.
+
+Expanding on the Age feature and looking at the SHAP values for Age specifically, we can plot the distribution of each 
+data point's SHAP value. This was done for both the Age and Weeks Worked features.
+
+![image](./plots/shap_age.png)
+
+![image](./plots/shap_weeks_worked.png)
+
+These show quite evident relationships to the SHAP values for the respective feature. Using this information, both the 
+Age feature and Weeks Worked were binned (based on their positive SHAP values) and the models were re-run. A new python 
+file was created for this (Dataiku_Second.py).
+
+The values were binned as follows:
+
+```python
+def binningAge(train, test):
+    train.loc[train['Age'] >= 40, 'NewAge'] = 4
+    train.loc[(train['Age'] >= 25) & (train['Age'] < 30), 'NewAge'] = 3
+    train.loc[(train['Age'] >= 30) & (train['Age'] < 35), 'NewAge'] = 2
+    train.loc[(train['Age'] >= 35) & (train['Age'] < 40), 'NewAge'] = 1
+    train.loc[train['Age'] < 25, 'NewAge'] = 0
+
+    test.loc[test['Age'] >= 40, 'NewAge'] = 4
+    test.loc[(test['Age'] >= 25) & (test['Age'] < 30), 'NewAge'] = 3
+    test.loc[(test['Age'] >= 30) & (test['Age'] < 35), 'NewAge'] = 2
+    test.loc[(test['Age'] >= 35) & (test['Age'] < 40), 'NewAge'] = 1
+    test.loc[test['Age'] < 25, 'NewAge'] = 0
+
+    train.drop('Age', axis=1, inplace=True)
+    test.drop('Age', axis=1, inplace=True)
+    return train, test
+
+def binningWeeksWorked(train, test):
+    train.loc[train['WeeksWorked'] >= 45, 'NewWeeksWorked'] = 5
+    train.loc[(train['WeeksWorked'] >= 40) & (train['WeeksWorked'] < 45), 'NewWeeksWorked'] = 4
+    train.loc[(train['WeeksWorked'] >= 35) & (train['WeeksWorked'] < 40), 'NewWeeksWorked'] = 3
+    train.loc[(train['WeeksWorked'] >= 30) & (train['WeeksWorked'] < 35), 'NewWeeksWorked'] = 2
+    train.loc[(train['WeeksWorked'] >= 25) & (train['WeeksWorked'] < 30), 'NewWeeksWorked'] = 1
+    train.loc[train['WeeksWorked'] < 25, 'NewWeeksWorked'] = 0
+
+    test.loc[test['WeeksWorked'] >= 45, 'NewWeeksWorked'] = 5
+    test.loc[(test['WeeksWorked'] >= 40) & (test['WeeksWorked'] < 45), 'NewWeeksWorked'] = 4
+    test.loc[(test['WeeksWorked'] >= 35) & (test['WeeksWorked'] < 40), 'NewWeeksWorked'] = 3
+    test.loc[(test['WeeksWorked'] >= 30) & (test['WeeksWorked'] < 35), 'NewWeeksWorked'] = 2
+    test.loc[(test['WeeksWorked'] >= 25) & (test['WeeksWorked'] < 30), 'NewWeeksWorked'] = 1
+    test.loc[test['WeeksWorked'] < 25, 'NewWeeksWorked'] = 0
+
+    train.drop('WeeksWorked', axis=1, inplace=True)
+    test.drop('WeeksWorked', axis=1, inplace=True)
+    return train, test
+```
+
+These produced the following results:
+
+| Logistic Regression | Decision Tree | Random Forest |
+|---------------------|---------------|---------------|
+| 94.614               | 93.27       | 95.528       |
+
+Slight improvements, but improvements nonetheless. 
+
+## Further Work
+
+The results shown here are quite positive, but at the same time they can be improved on. Following are some further steps 
+that can be taken to improve the project overall:
+
+* A greater effort at feature engineering, creating new features and possibly also reducing features to carry more 
+information.
+* A greater understanding of the underlying statistics used to define feature importance, which also contributes to 
+the previous point.
+* Looking at other models to solve the problem (neural networks, SVM)
+* Taking greater care to plan solving the problem from before hand. I.E. Revisiting feature selection repeatedly throughout 
+the project does not help.
 

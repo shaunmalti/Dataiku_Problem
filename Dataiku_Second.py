@@ -18,7 +18,6 @@ pd.set_option('display.max_columns', 50)
 from sklearn.utils import resample
 
 
-
 def convertNominalFeatures(data):
     for datum in data:
         for col in datum.columns.values:
@@ -54,8 +53,6 @@ def dropUnneeded(data):
 def importData():
     train = pd.read_csv('./us_census_full/census_income_learn.csv')
     test = pd.read_csv('./us_census_full/census_income_test.csv')
-    # allData = pd.DataFrame.merge(train, test)
-    # allData = concatDf(train, test)
     return train, test
 
 def dropMissingDataCols(train, test):
@@ -117,28 +114,16 @@ def binningWeeksWorked(train, test):
     test.drop('WeeksWorked', axis=1, inplace=True)
     return train, test
 
-def downSampleMajorityClass(data):
-    minorityDf = data[data['Target'] == 1]
-    majorityDf = data[data['Target'] == 0]
-
-    majorityDfDownsample = resample(majorityDf, replace=False, n_samples=len(minorityDf), random_state=1)
-
-    return pd.concat([majorityDfDownsample, minorityDf])
 
 def main():
     train, test = importData()
-    # train, test = checkRemoveMissingData([train, test])
-    # describe(train)
 
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
-    # train, test = dropMissingDataCols(train, test)
 
     train, test = binningAge(train, test)
     train, test = binningWeeksWorked(train, test)
-
-    # train = downSampleMajorityClass(train)
 
     # setting up training params
     y_data = train['Target']
@@ -159,21 +144,7 @@ def main():
     randFor(x_data, y_data, x_test, y_test)
 
 
-def evaluate(model, test_features, test_labels):
-    predictions = model.predict(test_features)
-    errors = abs(predictions - test_labels)
-    mape = 100 * np.mean(errors / test_labels)
-    accuracy = 100 - mape
-    print('Model Performance')
-    print('Average Error: {:0.4f} degrees.'.format(np.mean(errors)))
-    print('Accuracy = {:0.2f}%.'.format(accuracy))
-
-    return accuracy
-
 def hyperParamTuningRF(x_data, y_data, x_test, y_test):
-    print('****************************************')
-    print('STARTED HYPERPARAM TUNING')
-    print('****************************************')
     # trying out hyperparameter tuning
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.model_selection import RandomizedSearchCV
@@ -240,9 +211,7 @@ def logReg(x_data, y_data, x_test, y_test):
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
 
 def decTree(x_data, y_data, x_test, y_test):
-    # next try with decision tree
     d_t = DecisionTreeClassifier()
-    # cross val
     d_t.fit(x_data, y_data)
     preds = d_t.predict(x_test)
     print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)

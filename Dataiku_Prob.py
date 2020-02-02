@@ -38,8 +38,6 @@ from AveragingModel import StackingAveragedModel
 
 shap.initjs()
 
-from sklearn.model_selection import StratifiedKFold, KFold
-
 pd.set_option('display.max_columns', 50)
 
 def checkRemoveMissingData(data):
@@ -146,7 +144,7 @@ def dropUnneeded(data):
 def checkTargetSplit(data):
     plt.figure()
     sns.countplot(data['Target'])
-    # plt.show()
+    plt.show()
 
 
 def weighted_hist(x, weights, **kwargs):
@@ -195,100 +193,98 @@ def getCapStats(data):
 
 def gridPlot(data):
     # show effect of occupation wrt target
-    # grid = sns.FacetGrid(data, col='Target', aspect=1.6)
-    # grid.map(weighted_hist, 'OccupationCodeString', 'InstanceWeight', bins=np.arange(data['OccupationCodeString'].nunique())-0.5)
-    # plt.show()
-    #
+    grid = sns.FacetGrid(data, col='Target', aspect=1.6)
+    grid.map(weighted_hist, 'OccupationCodeString', 'InstanceWeight', bins=np.arange(data['OccupationCodeString'].nunique())-0.5)
+    plt.show()
+
     # show effect of occupation and gender wrt target
-    # grid = sns.FacetGrid(data, col='Target', row='Sex', aspect=1.6)
-    # grid.map(weighted_hist, 'Age', 'InstanceWeight', bins=np.arange(100)-0.5)
-    # plt.show()
+    grid = sns.FacetGrid(data, col='Target', row='Sex', aspect=1.6)
+    grid.map(weighted_hist, 'Age', 'InstanceWeight', bins=np.arange(100)-0.5)
+    plt.show()
 
     # show industry of highest scoring occupations wrt target
-    # specificIndustryData = data.loc[
-    #     data['OccupationCodeString'].isin([' Professional specialty', ' Executive admin and managerial', ' Sales', ' Precision production craft & repair'])
-    # ]
-    # grid = sns.FacetGrid(specificIndustryData, col='Target', row='OccupationCodeString', aspect=1.6)
-    # grid.map(weighted_hist, 'IndustryCodeString', 'InstanceWeight', bins=np.arange(data['IndustryCodeString'].nunique())-0.5)
-    # plt.show()
+    specificIndustryData = data.loc[
+        data['OccupationCodeString'].isin([' Professional specialty', ' Executive admin and managerial', ' Sales', ' Precision production craft & repair'])
+    ]
+    grid = sns.FacetGrid(specificIndustryData, col='Target', row='OccupationCodeString', aspect=1.6)
+    grid.map(weighted_hist, 'IndustryCodeString', 'InstanceWeight', bins=np.arange(data['IndustryCodeString'].nunique())-0.5)
+    plt.show()
 
     # weeks worked is the highest correlated var wrt target, therefore check gridplot wrt target
     # remove 0 weeks worked since they are the overwhelming majority
-    # weeksWorkedGreaterZero = data.loc[data['WeeksWorked'] > 0]
-    # grid = sns.FacetGrid(weeksWorkedGreaterZero, col='Target', aspect=1.6)
-    # grid.map(weighted_hist, 'WeeksWorked', 'InstanceWeight', bins=np.arange(weeksWorkedGreaterZero['WeeksWorked'].nunique())-0.5)
-    # plt.show()
+    weeksWorkedGreaterZero = data.loc[data['WeeksWorked'] > 0]
+    grid = sns.FacetGrid(weeksWorkedGreaterZero, col='Target', aspect=1.6)
+    grid.map(weighted_hist, 'WeeksWorked', 'InstanceWeight', bins=np.arange(weeksWorkedGreaterZero['WeeksWorked'].nunique())-0.5)
+    plt.show()
 
     # check capitalgains wrt target
     # changing capgains to ordinals to better view
     # ranges are based off of df['capitalgains'].describe() and taking into consideration min, 25%, 50%, 75% and max vals
-    # capitalGainsDf = data.loc[data['CapGains'] > 0]
-    # capitalGainsDf['CapTotal'] = capitalGainsDf['CapGains'] + capitalGainsDf['StockDiv'] - capitalGainsDf['CapLosses']
-    # capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 100) & (capitalGainsDf['CapTotal'] <= 2500), 'newCapGains'] = '100-2500'
-    # capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 2500) & (capitalGainsDf['CapTotal'] <= 5000), 'newCapGains'] = '2500-5000'
-    # capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 5000) & (capitalGainsDf['CapTotal'] <= 10000), 'newCapGains'] = '5000-10000'
-    # capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 10000) & (capitalGainsDf['CapTotal'] <= 50000), 'newCapGains'] = '10000-50000'
-    # capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 50000), 'newCapGains'] = '50000+'
-    # grid = sns.FacetGrid(capitalGainsDf, col='Target', aspect=1.6)
-    # grid.map(weighted_hist, 'newCapGains', 'InstanceWeight', bins=np.arange(5))
-    # plt.show()
+    capitalGainsDf = data.loc[data['CapGains'] > 0]
+    capitalGainsDf['CapTotal'] = capitalGainsDf['CapGains'] + capitalGainsDf['StockDiv'] - capitalGainsDf['CapLosses']
+    capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 100) & (capitalGainsDf['CapTotal'] <= 2500), 'newCapGains'] = '100-2500'
+    capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 2500) & (capitalGainsDf['CapTotal'] <= 5000), 'newCapGains'] = '2500-5000'
+    capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 5000) & (capitalGainsDf['CapTotal'] <= 10000), 'newCapGains'] = '5000-10000'
+    capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 10000) & (capitalGainsDf['CapTotal'] <= 50000), 'newCapGains'] = '10000-50000'
+    capitalGainsDf.loc[(capitalGainsDf['CapTotal'] > 50000), 'newCapGains'] = '50000+'
+    grid = sns.FacetGrid(capitalGainsDf, col='Target', aspect=1.6)
+    grid.map(weighted_hist, 'newCapGains', 'InstanceWeight', bins=np.arange(5))
+    plt.show()
 
     # next is numworkersemployer - highly corred (0.22), it is the number of workers working for the person's employer
-    # print(data['NumWorkersEmployer'].value_counts()) - 7 distinct values
-    # grid = sns.FacetGrid(data, col='Target', aspect=1.6)
-    # # grid.map(weighted_hist, 'NumWorkersEmployer', 'InstanceWeight', bins=np.arange(7)-0.5)
-    # grid.map(weighted_hist, 'IndustryCodeString', 'WeeksWorked', bins=np.arange(data['IndustryCodeString'].nunique())-0.5)
-    # plt.show()
+    grid = sns.FacetGrid(data, col='Target', aspect=1.6)
+    # grid.map(weighted_hist, 'NumWorkersEmployer', 'InstanceWeight', bins=np.arange(7)-0.5)
+    grid.map(weighted_hist, 'IndustryCodeString', 'WeeksWorked', bins=np.arange(data['IndustryCodeString'].nunique())-0.5)
+    plt.show()
 
-    # grid = sns.FacetGrid(capitalGainsDf, col='Target', aspect=1.6)
-    # grid.map(sns.distplot, 'CapGains')
-    # plt.show()
+    grid = sns.FacetGrid(capitalGainsDf, col='Target', aspect=1.6)
+    grid.map(sns.distplot, 'CapGains')
+    plt.show()
 
-    # grid = sns.FacetGrid(data, col='Target', aspect=1.6)
-    # grid.map(weighted_hist, 'MaritalStat', 'InstanceWeight', bins=np.arange(data['MaritalStat'].nunique())-0.5)
-    # plt.show()
+    grid = sns.FacetGrid(data, col='Target', aspect=1.6)
+    grid.map(weighted_hist, 'MaritalStat', 'InstanceWeight', bins=np.arange(data['MaritalStat'].nunique())-0.5)
+    plt.show()
 
     # checking pair plots for continuous features
-    # cols = ['Age', 'Wage', 'CapGains', 'CapLosses', 'StockDiv', 'NumWorkersEmployer', 'WeeksWorked']
-    # sns.set()
-    # sns.pairplot(data[cols], size=2.5)
-    # plt.savefig('continuousVars')
+    cols = ['Age', 'Wage', 'CapGains', 'CapLosses', 'StockDiv', 'NumWorkersEmployer', 'WeeksWorked']
+    sns.set()
+    sns.pairplot(data[cols], size=2.5)
+    plt.savefig('continuousVars')
 
     # rechecking age for histogram
-    # sns.distplot(data['Age'], hist_kws={'weights':data['InstanceWeight']}, fit=stats.norm)
-    # plt.figure()
-    # stats.probplot(data['Age'], plot=plt)
-    # plt.show()
+    sns.distplot(data['Age'], hist_kws={'weights':data['InstanceWeight']}, fit=stats.norm)
+    plt.figure()
+    stats.probplot(data['Age'], plot=plt)
+    plt.show()
 
-    # capStats = getCapStats(data)
+    capStats = getCapStats(data)
 
     # column wage has ~90% 0s, what is the likelihood that when having a wage you will be over 50k
-    # data.drop(data.loc[data['Wage'] == 0].index, inplace=True)
-    # grid = sns.FacetGrid(data, col='Target', aspect=1.6)
-    # grid.map(weighted_hist, 'Wage', 'InstanceWeight', bins=np.linspace(data['Wage'].min(), data['Wage'].max(), 50))
-    # plt.show()
+    data.drop(data.loc[data['Wage'] == 0].index, inplace=True)
+    grid = sns.FacetGrid(data, col='Target', aspect=1.6)
+    grid.map(weighted_hist, 'Wage', 'InstanceWeight', bins=np.linspace(data['Wage'].min(), data['Wage'].max(), 50))
+    plt.show()
     return
 
 
 def describe(data):
-    # checkTargetSplit(data)
+    checkTargetSplit(data)
     return gridPlot(data)
 
 
 def correlationPlot(data):
-    # k = 15  # number of variables for heatmap
+    k = 15  # number of variables for heatmap
     # tot corrmatrix
     corr = data.corr()
-    # hm = sns.heatmap(corr, vmin=-1, vmax=1, center=0, square=True, xticklabels=corr.columns.values, yticklabels=corr.columns.values)
-    # plt.show()
+    hm = sns.heatmap(corr, vmin=-1, vmax=1, center=0, square=True, xticklabels=corr.columns.values, yticklabels=corr.columns.values)
+    plt.show()
 
-    # cols = corr.nsmallest(k, 'Target')['Target'].index
-    # cm = np.corrcoef(data[cols].values.T)
-    # sns.set(font_scale=1.25)
-    # hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values,
-    #                  xticklabels=cols.values)
-    # plt.show()
-    # exit()
+    cols = corr.nsmallest(k, 'Target')['Target'].index
+    cm = np.corrcoef(data[cols].values.T)
+    sns.set(font_scale=1.25)
+    hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values,
+                     xticklabels=cols.values)
+    plt.show()
     return
 
 def concatDf(train, test):
@@ -297,8 +293,6 @@ def concatDf(train, test):
 def importData():
     train = pd.read_csv('./us_census_full/census_income_learn.csv')
     test = pd.read_csv('./us_census_full/census_income_test.csv')
-    # allData = pd.DataFrame.merge(train, test)
-    # allData = concatDf(train, test)
     return train, test
 
 def dropMissingDataCols(train, test):
@@ -314,35 +308,35 @@ def dropMissingDataCols(train, test):
 
 def featureRanking(x_data, y_data):
     # using recursive feature elimination
-    # estimator = LogisticRegression()
-    # selector = RFE(estimator, 5, step=1)
-    # selector = selector.fit(x_data, y_data)
-    # print(selector.ranking_)
-    # print(x_data.columns.values)
-    # print(selector.n_features_)
+    estimator = LogisticRegression()
+    selector = RFE(estimator, 5, step=1)
+    selector = selector.fit(x_data, y_data)
+    print(selector.ranking_)
+    print(x_data.columns.values)
+    print(selector.n_features_)
 
     # using chisquare test - only for categorical vars, higher implies greater independence
-    # chiData = x_data.drop(['Age', 'Wage', 'CapGains', 'CapLosses', 'StockDiv', 'NumWorkersEmployer', 'WeeksWorked'], axis=1)
-    # selector = SelectKBest(score_func=chi2, k='all')
-    # selector.fit(chiData, y_data)
-    # fs_res = selector.transform(chiData)
-    # for i in range(len(selector.scores_)):
-    #     print('Feature %s: %f' % (chiData.columns.values[i], selector.scores_[i]))
-    #
-    # bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_, log=True)
-    # plt.xticks(ticks=np.arange(len(chiData.columns.values)), labels=chiData.columns.values, rotation=90)
-    # plt.show()
+    chiData = x_data.drop(['Age', 'Wage', 'CapGains', 'CapLosses', 'StockDiv', 'NumWorkersEmployer', 'WeeksWorked'], axis=1)
+    selector = SelectKBest(score_func=chi2, k='all')
+    selector.fit(chiData, y_data)
+    fs_res = selector.transform(chiData)
+    for i in range(len(selector.scores_)):
+        print('Feature %s: %f' % (chiData.columns.values[i], selector.scores_[i]))
 
-    # # using mutual information feature selection
-    # selector = SelectKBest(score_func=mutual_info_classif, k='all')
-    # selector.fit(x_data, y_data)
-    # selector.transform(x_data)
-    # for i in range(len(selector.scores_)):
-    #     print('Feature %s: %f' % (x_data.columns.values[i], selector.scores_[i]))
-    #
-    # bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_)
-    # plt.xticks(ticks=np.arange(len(x_data.columns.values)), labels=x_data.columns.values, rotation=90)
-    # plt.show()
+    bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_, log=True)
+    plt.xticks(ticks=np.arange(len(chiData.columns.values)), labels=chiData.columns.values, rotation=90)
+    plt.show()
+
+    # using mutual information feature selection
+    selector = SelectKBest(score_func=mutual_info_classif, k='all')
+    selector.fit(x_data, y_data)
+    selector.transform(x_data)
+    for i in range(len(selector.scores_)):
+        print('Feature %s: %f' % (x_data.columns.values[i], selector.scores_[i]))
+
+    bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_)
+    plt.xticks(ticks=np.arange(len(x_data.columns.values)), labels=x_data.columns.values, rotation=90)
+    plt.show()
 
     return
 
@@ -357,15 +351,6 @@ def binningRace(train, test):
 
     return train, test
 
-def wageTest(data):
-    # train.drop(train.loc[train['Wage'] == 0].index, inplace=True)
-    # sns.distplot(train['Wage'], hist_kws={'weights': train['InstanceWeight']}, fit=stats.norm)
-    # plt.show()
-    print(data['Wage'].describe())
-
-    # check number of 0s in wage col
-    data['Wage'] = data['Wage'].replace(0, np.nan)
-    print(data.isnull().sum())
 
 def shapRanking(x_data, y_data):
     train_x, valid_x, train_y, valid_y = train_test_split(
@@ -461,14 +446,11 @@ def main():
     train, test = checkRemoveMissingData([train, test])
     # describe(train)
     # train, test = binningRace(train, test)
-    # print(train.isnull().sum())
 
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
     # train, test = aggregateGains([train, test])
-
-
     # train, test = dropMissingDataCols(train, test)
 
     # doing under/oversampling
@@ -476,7 +458,6 @@ def main():
     # train = upSampleMinorityClass(train, 90000)
 
     # correlationPlot(train)
-    # exit()
 
     # setting up training params
     y_data = train['Target']
@@ -490,16 +471,15 @@ def main():
     # scaling no real increase
     # train, test = scaleFeatures([train, test])
 
-    # check area under roc curve to better evaluate model performance
     y_test = test['Target']
     x_test = test.drop(['Target'], axis=1)
 
     # ranking features via
     # shapRanking(x_data, y_data)
     # featureRanking(x_data, y_data)
-    # exit()
 
     lightGBMModel(x_data, y_data, x_test, y_test)
+    # XGBoost takes very long to train, keep that in mind
     # xgBoost(x_data, y_data, x_test, y_test)
     logReg(x_data, y_data, x_test, y_test)
     decTree(x_data, y_data, x_test, y_test)
@@ -524,21 +504,8 @@ def stackedModel(x_data, y_data, x_test, y_test):
     y_pred = [round(x) for x in y_pred_stacked]
     print('Accuracy Stacked: ', (accuracy_score(y_pred, y_test)) * 100)
 
-def evaluate(model, test_features, test_labels):
-    predictions = model.predict(test_features)
-    errors = abs(predictions - test_labels)
-    mape = 100 * np.mean(errors / test_labels)
-    accuracy = 100 - mape
-    print('Model Performance')
-    print('Average Error: {:0.4f} degrees.'.format(np.mean(errors)))
-    print('Accuracy = {:0.2f}%.'.format(accuracy))
-
-    return accuracy
 
 def hyperParamTuningRF(x_data, y_data, x_test, y_test):
-    print('****************************************')
-    print('STARTED HYPERPARAM TUNING')
-    print('****************************************')
     # trying out hyperparameter tuning
     from sklearn.ensemble import RandomForestRegressor
     from sklearn.model_selection import RandomizedSearchCV
@@ -569,14 +536,12 @@ def logReg(x_data, y_data, x_test, y_test):
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
 
 def decTree(x_data, y_data, x_test, y_test):
-    # next try with decision tree
     d_t = DecisionTreeClassifier()
     d_t.fit(x_data, y_data)
     preds = d_t.predict(x_test)
     print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)
 
 def randFor(x_data, y_data, x_test, y_test):
-    # final impl with random forests
     rf = RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
                            max_features='sqrt', max_depth=28, bootstrap=False)
     rf.fit(x_data, y_data)
