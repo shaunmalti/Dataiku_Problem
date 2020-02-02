@@ -10,17 +10,21 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC, SVR
 from sklearn.decomposition import PCA
-from sklearn.feature_selection import RFE
-from sklearn.model_selection import cross_val_score
+from sklearn.feature_selection import RFE, SelectKBest, chi2, mutual_info_classif
+from sklearn.model_selection import cross_val_score, train_test_split
 
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.utils import resample
 
 from scipy import stats
-
+import shap
 import prince
+import lightgbm as lgb
+from xgboost import XGBClassifier
 
-from sklearn.model_selection import StratifiedKFold
+shap.initjs()
+
+from sklearn.model_selection import StratifiedKFold, KFold
 
 pd.set_option('display.max_columns', 50)
 
@@ -237,10 +241,13 @@ def gridPlot(data):
     # plt.show()
 
     # capStats = getCapStats(data)
-    data['CapTotal'] = data['CapGains'] - data['CapLosses'] + data['StockDiv']
-    # TODO try statistics with captotal column
 
-    # return
+    # column wage has ~90% 0s, what is the likelihood that when having a wage you will be over 50k
+    # data.drop(data.loc[data['Wage'] == 0].index, inplace=True)
+    # grid = sns.FacetGrid(data, col='Target', aspect=1.6)
+    # grid.map(weighted_hist, 'Wage', 'InstanceWeight', bins=np.linspace(data['Wage'].min(), data['Wage'].max(), 50))
+    # plt.show()
+    return
 
 
 def describe(data):
@@ -292,27 +299,147 @@ def dropMissingDataCols(train, test):
 
 
 def featureRanking(x_data, y_data):
-    estimator = LogisticRegression()
-    selector = RFE(estimator, 5, step=1)
-    selector = selector.fit(x_data, y_data)
-    print(selector.ranking_)
-    print(x_data.columns.values)
-    print(selector.n_features_)
-    # exit()
+    # using recursive feature elimination
+    # estimator = LogisticRegression()
+    # selector = RFE(estimator, 5, step=1)
+    # selector = selector.fit(x_data, y_data)
+    # print(selector.ranking_)
+    # print(x_data.columns.values)
+    # print(selector.n_features_)
+
+    # using chisquare test
+    # selector = SelectKBest(score_func=chi2, k='all')
+    # selector.fit(x_data, y_data)
+    # fs_res = selector.transform(x_data)
+    # for i in range(len(selector.scores_)):
+    #     print('Feature %s: %f' % (x_data.columns.values[i], selector.scores_[i]))
+    #
+    # bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_, log=True)
+    # plt.xticks(ticks=np.arange(len(x_data.columns.values)), labels=x_data.columns.values, rotation=90)
+    # plt.show()
+
+    # # using mutual information feature selection
+    # selector = SelectKBest(score_func=mutual_info_classif, k='all')
+    # selector.fit(x_data, y_data)
+    # selector.transform(x_data)
+    # for i in range(len(selector.scores_)):
+    #     print('Feature %s: %f' % (x_data.columns.values[i], selector.scores_[i]))
+    #
+    # bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_)
+    # plt.xticks(ticks=np.arange(len(x_data.columns.values)), labels=x_data.columns.values, rotation=90)
+    # plt.show()
+
+    return
+
+def binningRace(train, test):
+    train['Race'] = train['Race'].replace([' Asian or Pacific Islander', ' Amer Indian Aleut or Eskimo',
+                                           ' Black', ' Other'], 'Other')
+    train['Race'] = train['Race'].replace([' White'], 'White')
+
+    test['Race'] = test['Race'].replace([' Asian or Pacific Islander', ' Amer Indian Aleut or Eskimo',
+                                         ' Black', ' Other'], 'Other')
+    test['Race'] = test['Race'].replace([' White'], 'White')
+
+    return train, test
+
+def wageTest(data):
+    # train.drop(train.loc[train['Wage'] == 0].index, inplace=True)
+    # sns.distplot(train['Wage'], hist_kws={'weights': train['InstanceWeight']}, fit=stats.norm)
+    # plt.show()
+    print(data['Wage'].describe())
+
+    # check number of 0s in wage col
+    data['Wage'] = data['Wage'].replace(0, np.nan)
+    print(data.isnull().sum())
+
+def shapRanking(x_data, y_data):
+    train_x, valid_x, train_y, valid_y = train_test_split(
+        x_data, y_data, test_size=0.33, random_state=42)
+
+    train_cols = x_data.columns.tolist()
+
+    train_data = lgb.Dataset(train_x, label=train_y)
+    valid_data = lgb.Dataset(valid_x, label=valid_y)
+
+    # LGB parameters:
+    params = {'learning_rate': 0.05,
+              'boosting': 'gbdt',
+              'objective': 'binary',
+              'num_leaves': 2000,
+              'min_data_in_leaf': 200,
+              'max_bin': 200,
+              'max_depth': 16,
+              'seed': 2018,
+              'nthread': 10, }
+
+    # LGB training:
+    lgb_model = lgb.train(params, train_data,
+                          num_boost_round=2000,
+                          valid_sets=(valid_data,),
+                          verbose_eval=10,
+                          early_stopping_rounds=20)
+
+    explainer = shap.TreeExplainer(lgb_model).shap_values(valid_x)
+    shap.summary_plot(explainer, valid_x)
+    plt.show()
+
+def lightGBMModel(x_data, y_data, x_test, y_test):
+    # using lightgbm model to compare accuracy with normal rand forest
+    train_x, valid_x, train_y, valid_y = train_test_split(
+        x_data, y_data, test_size=0.33, random_state=42)
+
+    train_data = lgb.Dataset(train_x, label=train_y)
+    valid_data = lgb.Dataset(valid_x, label=valid_y)
+
+    params = {
+        'boosting_type': 'gbdt',
+        'objective': 'binary',
+        'metric': {'l2', 'l1'},
+        'num_leaves': 31,
+        'learning_rate': 0.05,
+        'feature_fraction': 0.9,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 5,
+        'verbose': 0
+    }
+
+    print('Starting training...')
+    # train
+    gbm = lgb.train(params,
+                    train_data,
+                    num_boost_round=2000,
+                    valid_sets=valid_data,
+                    early_stopping_rounds=50)
+
+    print('Starting predicting...')
+    # predict
+    y_prob = gbm.predict(x_test.values, num_iteration=gbm.best_iteration)
+    y_pred = [round(x) for x in y_prob]
+    print('Accuracy LGBM: ', (accuracy_score(y_pred, y_test)) * 100)
+
+
+def xgBoost(x_data, y_data, x_test, y_test):
+    model = XGBClassifier()
+    model.fit(x_data, y_data)
+    y_pred = model.predict(x_test)
+    print('Accuracy XGBoost: ', (accuracy_score(y_pred, y_test)) * 100)
 
 
 def main():
     train, test = importData()
     # checkMissingData(train)
     # describe(train)
+
+    # train, test = binningRace(train, test)
+
     # exit()
+
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
     # train, test = aggregateGains([train, test])
-    # correlationPlot(train)
-    # exit()
-    train, test = dropMissingDataCols(train, test)
+
+    # train, test = dropMissingDataCols(train, test)
 
     # doing under/oversampling
     # train = downSampleMajorityClass(train, 90000)
@@ -322,8 +449,6 @@ def main():
     y_data = train['Target']
     x_data = train.drop(['Target'], axis=1)
 
-    # featureRanking(x_data, y_data)
-
     # scaling no real increase
     # train, test = scaleFeatures([train, test])
 
@@ -331,42 +456,28 @@ def main():
     y_test = test['Target']
     x_test = test.drop(['Target'], axis=1)
 
-
-    reg = LogisticRegression()
-    score = cross_val_score(reg, x_data, y_data, cv=4)
-    reg.fit(x_data, y_data)
-    preds = reg.predict(x_test)
-
-    print(score.mean(), score.std() * 2)
-
-    print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
-
-    pred_prob_train = reg.predict_proba(x_data)
-    pred_prob_train = [p[1] for p in pred_prob_train]
-    print('ROC Accuracy Log Reg: ', roc_auc_score(y_data, pred_prob_train))
-
-    # next try with decision tree
-    d_t = DecisionTreeClassifier()
-    # cross val
-    d_t.fit(x_data, y_data)
-    preds = d_t.predict(x_test)
-    print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)
-
-    pred_prob_train = d_t.predict_proba(x_data)
-    pred_prob_train = [p[1] for p in pred_prob_train]
-    print('ROC Accuracy DT: ', roc_auc_score(y_data, pred_prob_train))
+    # shapRanking(x_data, y_data)
+    # featureRanking(x_data, y_data)
+    xgBoost(x_data, y_data, x_test, y_test)
+    exit()
+    lightGBMModel(x_data, y_data, x_test, y_test)
+    logReg(x_data, y_data, x_test, y_test)
+    decTree(x_data, y_data, x_test, y_test)
+    randFor(x_data, y_data, x_test, y_test)
 
 
-    # final impl with random forests
-    rf = RandomForestClassifier()
-    rf.fit(x_data, y_data)
-    preds = rf.predict(x_test)
-    print('Accuracy Rand For: ', (accuracy_score(preds, y_test)) * 100)
+def evaluate(model, test_features, test_labels):
+    predictions = model.predict(test_features)
+    errors = abs(predictions - test_labels)
+    mape = 100 * np.mean(errors / test_labels)
+    accuracy = 100 - mape
+    print('Model Performance')
+    print('Average Error: {:0.4f} degrees.'.format(np.mean(errors)))
+    print('Accuracy = {:0.2f}%.'.format(accuracy))
 
-    pred_prob_train = rf.predict_proba(x_data)
-    pred_prob_train = [p[1] for p in pred_prob_train]
-    print('ROC Accuracy Rand For: ', roc_auc_score(y_data, pred_prob_train))
+    return accuracy
 
+def hyperParamTuningRF(x_data, y_data, x_test, y_test):
     print('****************************************')
     print('STARTED HYPERPARAM TUNING')
     print('****************************************')
@@ -388,47 +499,33 @@ def main():
                    'bootstrap': bootstrap}
     rfReg = RandomForestRegressor(random_state=123)
     rfRand = RandomizedSearchCV(estimator=rfReg, param_distributions=random_grid, n_iter=100, cv=3, verbose=2,
-                                   random_state=42, n_jobs=-1)
+                                random_state=42, n_jobs=-1)
     # Fit the random search model
     rfRand.fit(x_data, y_data)
-
     print(rfRand.best_params_)
 
-    best_random = rfRand.best_estimator_
-    print('****************************************')
-    print('EVALUATING HYPERPARAM TUNED RANDOM FOREST')
-    print('****************************************')
-    random_accuracy = evaluate(best_random, x_test, y_test)
-    print('****************************************')
-    print('EVALUATING ORIG RANDOM FOREST')
-    print('****************************************')
-    random_acc_orig = evaluate(rf, x_test, y_test)
+def logReg(x_data, y_data, x_test, y_test):
+    reg = LogisticRegression()
+    reg.fit(x_data, y_data)
+    preds = reg.predict(x_test)
+    print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
 
-    print('Improvement of {:0.2f}%.'.format(100 * (random_accuracy - random_acc_orig) / random_acc_orig))
+def decTree(x_data, y_data, x_test, y_test):
+    # next try with decision tree
+    d_t = DecisionTreeClassifier()
+    # cross val
+    d_t.fit(x_data, y_data)
+    preds = d_t.predict(x_test)
+    print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)
 
-
-
-    # SGDclassifier
-    sgd = SGDClassifier()
-    # added kfolds
-    score = cross_val_score(sgd, x_data, y_data, cv=5)
-    print(score.mean(), score.std() * 2)
-    sgd.fit(x_data, y_data)
-    preds = sgd.predict(x_test)
-
-    print('Accuracy SGD: ', (accuracy_score(preds, y_test)) * 100)
-
-
-def evaluate(model, test_features, test_labels):
-    predictions = model.predict(test_features)
-    errors = abs(predictions - test_labels)
-    mape = 100 * np.mean(errors / test_labels)
-    accuracy = 100 - mape
-    print('Model Performance')
-    print('Average Error: {:0.4f} degrees.'.format(np.mean(errors)))
-    print('Accuracy = {:0.2f}%.'.format(accuracy))
-
-    return accuracy
+def randFor(x_data, y_data, x_test, y_test):
+    # final impl with random forests
+    rf = RandomForestClassifier()
+    RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
+                           max_features='sqrt', max_depth=28, bootstrap=False)
+    rf.fit(x_data, y_data)
+    preds = rf.predict(x_test)
+    print('Accuracy Rand For: ', (accuracy_score(preds, y_test)) * 100)
 
 
 if __name__ == '__main__':
