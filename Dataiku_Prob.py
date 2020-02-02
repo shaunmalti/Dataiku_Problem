@@ -13,14 +13,28 @@ from sklearn.decomposition import PCA
 from sklearn.feature_selection import RFE, SelectKBest, chi2, mutual_info_classif
 from sklearn.model_selection import cross_val_score, train_test_split
 
+# for stacked model
+from sklearn.linear_model import ElasticNet, Lasso
+from sklearn.kernel_ridge import KernelRidge
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import RobustScaler
+
 from sklearn.metrics import accuracy_score, roc_auc_score
+
+# to down/upsample
 from sklearn.utils import resample
 
+# other libraries
 from scipy import stats
 import shap
 import prince
+
+# other models
 import lightgbm as lgb
 from xgboost import XGBClassifier
+# stacked regressor
+from AveragingModel import StackingAveragedModel
 
 shap.initjs()
 
@@ -28,13 +42,19 @@ from sklearn.model_selection import StratifiedKFold, KFold
 
 pd.set_option('display.max_columns', 50)
 
-def checkMissingData(data):
-    data = data.replace(' ?', np.nan)
-    data = data.replace(' Not in universe', np.nan)
+def checkRemoveMissingData(data):
+    testData = data.copy()
+    testData[0] = testData[0].replace(' ?', np.nan)
+    testData[0] = testData[0].replace(' Not in universe', np.nan)
 
-    # from this largest lack of data is in EducationLastWk, LabourUnion, UnempReason, PrevReg, PrevState, MigResSunbelt, VeteranAdmQ > 90% are nulls
-    print(data.isnull().sum()/len(data) * 100)
+    # from this largest lack of testData[0] is in EducationLastWk, LabourUnion, UnempReason, PrevReg, PrevState, MigResSunbelt, VeteranAdmQ > 90% are nulls
+    nullSeries = testData[0].isnull().sum()/len(testData[0]) * 100
 
+    for item in nullSeries.iteritems():
+        if item[1] >= 90:
+            data[0].drop([item[0]], axis=1, inplace=True)
+            data[1].drop([item[0]], axis=1, inplace=True)
+    return data[0], data[1]
 
 def downSampleMajorityClass(data, amount):
     minorityDf = data[data['Target'] == 1]
@@ -99,6 +119,7 @@ def doMCA(data):
 
 def replaceQMarks(data):
     QCols = ['MigCodeMSA', 'MigCodeRegDiff', 'MigCodeRegSame', 'MigResSunbelt', 'FatherBirthCountry', 'MotherBirthCountry', 'SelfBirthCountry', 'PrevState']
+    # QCols = ['MigCodeMSA', 'MigCodeRegDiff', 'MigCodeRegSame', 'FatherBirthCountry', 'MotherBirthCountry', 'SelfBirthCountry']
     for datum in data:
         for col in QCols:
             if datum[col].value_counts().index.to_list()[0] == ' ?':
@@ -257,25 +278,24 @@ def describe(data):
 
 def correlationPlot(data):
     # k = 15  # number of variables for heatmap
-    # corrMatrix = data.corr()
-    #
-    # cols = corrMatrix.nlargest(k, 'Target')['Target'].index
+    # tot corrmatrix
+    corr = data.corr()
+    # hm = sns.heatmap(corr, vmin=-1, vmax=1, center=0, square=True, xticklabels=corr.columns.values, yticklabels=corr.columns.values)
+    # plt.show()
+
+    # cols = corr.nsmallest(k, 'Target')['Target'].index
     # cm = np.corrcoef(data[cols].values.T)
     # sns.set(font_scale=1.25)
     # hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values,
     #                  xticklabels=cols.values)
     # plt.show()
 
-    # tot corrmatrix
-    corr = data.corr()
-    hm = sns.heatmap(corr, vmin=-1, vmax=1, center=0, square=True, xticklabels=corr.columns.values, yticklabels=corr.columns.values)
-    plt.show()
-    # cols = corrMatrix.nsmallest(k, 'Target')['Target'].index
-    # cm = np.corrcoef(data[cols].values.T)
-    # sns.set(font_scale=1.25)
-    # hm = sns.heatmap(cm, cbar=True, annot=True, square=True, fmt='.2f', annot_kws={'size': 10}, yticklabels=cols.values,
-    #                  xticklabels=cols.values)
-    # plt.show()
+    corr_target = abs(corr['Target'])
+
+    corr_ww = corr['WeeksWorked']
+    print('WEEKS WORKED CORR')
+    print(corr_ww.sort_values())
+    return
 
 def concatDf(train, test):
     return pd.concat([train, test])
@@ -307,15 +327,16 @@ def featureRanking(x_data, y_data):
     # print(x_data.columns.values)
     # print(selector.n_features_)
 
-    # using chisquare test
+    # using chisquare test - only for categorical vars, higher implies greater independence
+    # chiData = x_data.drop(['Age', 'Wage', 'CapGains', 'CapLosses', 'StockDiv', 'NumWorkersEmployer', 'WeeksWorked'], axis=1)
     # selector = SelectKBest(score_func=chi2, k='all')
-    # selector.fit(x_data, y_data)
-    # fs_res = selector.transform(x_data)
+    # selector.fit(chiData, y_data)
+    # fs_res = selector.transform(chiData)
     # for i in range(len(selector.scores_)):
-    #     print('Feature %s: %f' % (x_data.columns.values[i], selector.scores_[i]))
+    #     print('Feature %s: %f' % (chiData.columns.values[i], selector.scores_[i]))
     #
     # bar = plt.bar([i for i in range(len(selector.scores_))], selector.scores_, log=True)
-    # plt.xticks(ticks=np.arange(len(x_data.columns.values)), labels=x_data.columns.values, rotation=90)
+    # plt.xticks(ticks=np.arange(len(chiData.columns.values)), labels=chiData.columns.values, rotation=90)
     # plt.show()
 
     # # using mutual information feature selection
@@ -380,13 +401,21 @@ def shapRanking(x_data, y_data):
                           early_stopping_rounds=20)
 
     explainer = shap.TreeExplainer(lgb_model).shap_values(valid_x)
-    shap.summary_plot(explainer, valid_x)
+    shap.summary_plot(explainer[1], valid_x)
+    plt.show()
+    shap.dependence_plot('Age', explainer[1], valid_x)
+    plt.show()
+    shap.dependence_plot('WeeksWorked', explainer[1], valid_x)
+    plt.show()
+    shap.dependence_plot('Sex', explainer[1], valid_x)
+    plt.show()
+    shap.dependence_plot('Education', explainer[1], valid_x)
     plt.show()
 
 def lightGBMModel(x_data, y_data, x_test, y_test):
     # using lightgbm model to compare accuracy with normal rand forest
     train_x, valid_x, train_y, valid_y = train_test_split(
-        x_data, y_data, test_size=0.33, random_state=42)
+        x_data, y_data, test_size=0.33)
 
     train_data = lgb.Dataset(train_x, label=train_y)
     valid_data = lgb.Dataset(valid_x, label=valid_y)
@@ -400,7 +429,9 @@ def lightGBMModel(x_data, y_data, x_test, y_test):
         'feature_fraction': 0.9,
         'bagging_fraction': 0.8,
         'bagging_freq': 5,
-        'verbose': 0
+        'verbose': 0,
+        'max_depth': 28,
+        'num_estimators': 800
     }
 
     print('Starting training...')
@@ -419,6 +450,11 @@ def lightGBMModel(x_data, y_data, x_test, y_test):
 
 
 def xgBoost(x_data, y_data, x_test, y_test):
+    # using model with tuned hyperparams (tuned for random forest classifier)
+    # produces better results ~0.5% better but takes substantially longer to compute
+    # model = XGBClassifier(n_estimators=800, max_depth=28)
+
+    # using base model
     model = XGBClassifier()
     model.fit(x_data, y_data)
     y_pred = model.predict(x_test)
@@ -427,12 +463,9 @@ def xgBoost(x_data, y_data, x_test, y_test):
 
 def main():
     train, test = importData()
-    # checkMissingData(train)
+    # train, test = checkRemoveMissingData([train, test])
     # describe(train)
-
     # train, test = binningRace(train, test)
-
-    # exit()
 
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
@@ -445,9 +478,17 @@ def main():
     # train = downSampleMajorityClass(train, 90000)
     # train = upSampleMinorityClass(train, 90000)
 
-    # this is but a test
+    # correlationPlot(train)
+    # exit()
+
+    # setting up training params
     y_data = train['Target']
     x_data = train.drop(['Target'], axis=1)
+
+    # reducing training params for stacked model
+    # x_data = train.sample(n=30000)
+    # y_data = x_data['Target']
+    # x_data = x_data.drop(['Target'], axis=1)
 
     # scaling no real increase
     # train, test = scaleFeatures([train, test])
@@ -456,15 +497,35 @@ def main():
     y_test = test['Target']
     x_test = test.drop(['Target'], axis=1)
 
-    # shapRanking(x_data, y_data)
+    # ranking features via
+    shapRanking(x_data, y_data)
     # featureRanking(x_data, y_data)
-    xgBoost(x_data, y_data, x_test, y_test)
     exit()
+
     lightGBMModel(x_data, y_data, x_test, y_test)
+    # xgBoost(x_data, y_data, x_test, y_test)
     logReg(x_data, y_data, x_test, y_test)
     decTree(x_data, y_data, x_test, y_test)
     randFor(x_data, y_data, x_test, y_test)
 
+
+def stackedModel(x_data, y_data, x_test, y_test):
+    lassoS = make_pipeline(RobustScaler(), Lasso(alpha=0.0005, random_state=1))
+    GBRS = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05,
+                                     max_depth=4, max_features='sqrt',
+                                     min_samples_leaf=15, min_samples_split=10,
+                                     loss='huber', random_state=5)
+    LogReg = LogisticRegression()
+    rf = RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
+                                max_features='sqrt', max_depth=28, bootstrap=False)
+    averageStackedModel = StackingAveragedModel(base_models=(rf, GBRS, LogReg), meta_model=lassoS)
+    print('Started fitting stacked model...')
+    averageStackedModel.fit(x_data, y_data)
+
+    print('Making prediction from stacked model...')
+    y_pred_stacked = averageStackedModel.predict(x_test.values)
+    y_pred = [round(x) for x in y_pred_stacked]
+    print('Accuracy Stacked: ', (accuracy_score(y_pred, y_test)) * 100)
 
 def evaluate(model, test_features, test_labels):
     predictions = model.predict(test_features)
@@ -505,7 +566,7 @@ def hyperParamTuningRF(x_data, y_data, x_test, y_test):
     print(rfRand.best_params_)
 
 def logReg(x_data, y_data, x_test, y_test):
-    reg = LogisticRegression()
+    reg = LogisticRegression(solver='lbfgs')
     reg.fit(x_data, y_data)
     preds = reg.predict(x_test)
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
@@ -520,8 +581,7 @@ def decTree(x_data, y_data, x_test, y_test):
 
 def randFor(x_data, y_data, x_test, y_test):
     # final impl with random forests
-    rf = RandomForestClassifier()
-    RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
+    rf = RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
                            max_features='sqrt', max_depth=28, bootstrap=False)
     rf.fit(x_data, y_data)
     preds = rf.predict(x_test)
