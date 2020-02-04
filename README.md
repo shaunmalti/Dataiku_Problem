@@ -703,3 +703,12 @@ the previous point.
 * Taking greater care to plan solving the problem from before hand. I.E. Revisiting feature selection repeatedly throughout 
 the project does not help.
 
+### Edit - More Further Work
+
+* Use pred to fill in missing values, some form of regression?
+* Tune xgboost and lightgbm, was not done due to the time it would take - Random Forest hyperparameter tuning took 
+around 7 hours.
+* Log transform of continuous variables to reduce skew and make more normally distributed. - done
+* One hot some categorical vars to test.
+* Pivot to create new feature, wage bin as column name then number of weeks worked in column 
+* Adaptive binning via df.quantile() to get corresponding quant list 
