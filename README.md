@@ -705,10 +705,44 @@ the project does not help.
 
 ### Edit - More Further Work
 
-* Use pred to fill in missing values, some form of regression?
+* Use pred to fill in missing values, some form of regression? - done for wage
 * Tune xgboost and lightgbm, was not done due to the time it would take - Random Forest hyperparameter tuning took 
 around 7 hours.
 * Log transform of continuous variables to reduce skew and make more normally distributed. - done
 * One hot some categorical vars to test.
 * Pivot to create new feature, wage bin as column name then number of weeks worked in column 
 * Adaptive binning via df.quantile() to get corresponding quant list 
+
+## Using a model to predict 0 values and use them during training (Wage)
+
+![image](./plots/wage_weeksworked_facetgrid.png)
+
+![image](./plots/wage_weeksworked_pairplot.png)
+
+The training data was split based on if the record contained a wage per hour or not (0). The set containing a wage per hour 
+was used as training data for a polynomial regression model which was then used to predict the other portion of training data
+having no (0) wage per hour. 
+
+This data was then used used as training data for the previously created models and was done to see if it could enhance 
+the accuracy by enriching the data (filling in 0 value wage entries).
+
+The regressed predicted values for the Wage feature were seen to be unreasonable (some into the 10s of thousands). The 
+shapley ranking method was reused here as done previously, but for the rows where wage is not equal to 0.
+
+![image](./plots/wage_non_zero_shapley.png)
+
+The most important features here were then binned based on a visual analysis done on each individual features shapley 
+distribution plot. The first 6 features were taken. First the original models were retrained using the predicted 
+wages mentioned previously and resulted in the following:
+
+| Logistic Regression | Decision Tree | Random Forest | LightGBM |
+|---------------------|---------------|---------------|---------------|
+| 94.591               | 92.899       | 95.051       | 95.051       |
+
+After this the same was done, but this time binning the resultant wage predictions.
+
+| Logistic Regression | Decision Tree | Random Forest | LightGBM |
+|---------------------|---------------|---------------|---------------|
+| 94.599               | 92.768       | 95.26       | 95.439       |
+
+Loss of information for tree based models produces slight losses in accuracy.

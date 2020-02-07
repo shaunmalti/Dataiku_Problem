@@ -3,14 +3,15 @@ import seaborn as sns
 import numpy as np
 import matplotlib.pyplot as plt
 
-from sklearn.preprocessing import LabelEncoder
-from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import LabelEncoder, PolynomialFeatures, MinMaxScaler
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, cross_val_predict, KFold
 
 from sklearn.metrics import accuracy_score
 from sklearn import metrics
+from Dataiku_Prob import shapRanking
 
 # other models
 import lightgbm as lgb
@@ -114,6 +115,116 @@ def binningWeeksWorked(train, test):
     test.drop('WeeksWorked', axis=1, inplace=True)
     return train, test
 
+def binningWage(train, test):
+    train.loc[(train['Wage'] >= 0) & (train['Wage'] < 585), 'BinnedWage'] = 0
+    train.loc[(train['Wage'] >= 585) & (train['Wage'] < 800), 'BinnedWage'] = 1
+    train.loc[(train['Wage'] >= 800) & (train['Wage'] < 1200), 'BinnedWage'] = 2
+    train.loc[train['Wage'] >= 1200, 'BinnedWage'] = 4
+
+    test.loc[(test['Wage'] >= 0) & (test['Wage'] < 585), 'BinnedWage'] = 0
+    test.loc[(test['Wage'] >= 585) & (test['Wage'] < 800), 'BinnedWage'] = 1
+    test.loc[(test['Wage'] >= 800) & (test['Wage'] < 1200), 'BinnedWage'] = 2
+    test.loc[test['Wage'] >= 1200, 'BinnedWage'] = 4
+
+    train.drop('Wage', axis=1, inplace=True)
+    test.drop('Wage', axis=1, inplace=True)
+    return train, test
+
+
+def binAgeShapley(data):
+    data.loc[(data['Age'] >= 0) & (data['Age'] < 20), 'BinnedAge'] = 0
+    data.loc[(data['Age'] >= 20) & (data['Age'] < 36), 'BinnedAge'] = 1
+    data.loc[(data['Age'] >= 36) & (data['Age'] < 50), 'BinnedAge'] = 2
+    data.loc[data['Age'] >= 50, 'BinnedAge'] = 4
+
+    data.drop('Age', axis=1, inplace=True)
+
+def binTaxFilerStatShapley(data):
+    data.loc[(data['TaxFilerStat'] >= 0) & (data['TaxFilerStat'] <= 3), 'BinnedTaxFilerStat'] = 0
+    data.loc[(data['TaxFilerStat'] >= 4) & (data['TaxFilerStat'] <= 5), 'BinnedTaxFilerStat'] = 1
+
+    data.drop('TaxFilerStat', axis=1, inplace=True)
+
+def binNumWorkersEmployer(data):
+    data.loc[(data['NumWorkersEmployer'] >= 5) & (data['NumWorkersEmployer'] <= 6), 'BinnedNumWorkersEmployer'] = 0
+    data.loc[data['NumWorkersEmployer'] <= 4, 'BinnedNumWorkersEmployer'] = 1
+
+    data.drop('NumWorkersEmployer', axis=1, inplace=True)
+
+
+def polyRegPrep(data):
+    for datum in data:
+        binAgeShapley(datum)
+        binTaxFilerStatShapley(datum)
+        binNumWorkersEmployer(datum)
+    return data
+
+
+def regressWage(train, test):
+    impRegCols = ['NumWorkersEmployer', 'Age', 'TaxFilerStat', 'HouseLive1Yr', 'OccupationCode', 'IndustryCode', 'Wage', 'Target']
+    impRegColsTrain = train[impRegCols].copy()
+    impRegColsTest = test[impRegCols].copy()
+
+    wageNonZero = impRegColsTrain.drop(impRegColsTrain.loc[(impRegColsTrain['Wage'] == 0)].index)
+
+    # Keep wage where wage is 0
+    wageTestZero = impRegColsTest.drop(impRegColsTest.loc[(impRegColsTest['Wage'] != 0)].index)
+    # Keep wage where wage more than 0 -- don't need this
+    wageTestNonZero = impRegColsTest.drop(impRegColsTest.loc[impRegColsTest['Wage'] == 0].index)
+
+    wageZero = impRegColsTrain.drop(impRegColsTrain.loc[impRegColsTrain['Wage'] != 0].index)
+
+    y_data_wage = wageNonZero['Wage']
+    test_y_data_wage = wageTestNonZero['Wage']
+
+    x_data_wage = wageNonZero.drop(['Wage', 'Target'], axis=1)
+
+    x_data_wage_test = wageZero.drop(['Wage', 'Target'], axis=1)
+
+    test_x_data_wage = wageTestZero.drop(['Wage', 'Target'], axis=1)
+    # do shap test on wageNonZero wrt Wage
+    # shapRanking(x_data_wage, np.ndarray.flatten(y_data_wage))
+
+    # decided to bin houselive1yr, age, taxfilerstat
+    x_data_wage, test_x_data_wage = polyRegPrep([x_data_wage, test_x_data_wage])
+
+    # polynomial regression to try predict wage values
+    polyFeatures = PolynomialFeatures(degree=2)
+    x_poly = polyFeatures.fit_transform(x_data_wage)
+    wageLogReg = LinearRegression()
+    wageLogReg.fit(x_poly, y_data_wage)
+
+    regressedWage = wageLogReg.predict(polyFeatures.fit_transform(x_data_wage_test))
+
+    # return minimum between log reg prediction and 0 as cannot have negative wage
+    regressedWage = [max(int(x), 0) for x in regressedWage]
+
+
+    x_poly_test = polyFeatures.transform(test_x_data_wage)
+    wageTestRegressed = wageLogReg.predict(x_poly_test)
+    wageTestRegressed = [max(int(x), 0) for x in wageTestRegressed]
+    wageTestZero['Wage'] = wageTestRegressed
+
+    wageZero['Wage'] = regressedWage
+    wageNonZero['Wage'] = y_data_wage
+
+    # apply prediction to train and test data
+    train0s = train.drop(train.loc[train['Wage'] != 0].index)
+    train0s['Wage'] = regressedWage
+    train.drop(train.loc[train['Wage'] == 0].index, inplace=True)
+    train = pd.concat([train, train0s])
+
+    test0s = test.drop(test.loc[test['Wage'] != 0].index)
+    test0s['Wage'] = wageTestRegressed
+    test.drop(test.loc[test['Wage'] == 0].index, inplace=True)
+    test = pd.concat([test, test0s])
+
+    # return pd.concat([wageZero, wageNonZero]), pd.concat([wageTestZero, wageTestNonZero])
+    return train, test
+
+def pivotFeatureWW(train):
+    train.loc[(train['WeeksWorked'] >= 0) & (train['WeeksWorked'] < 10), 'WeeksWorkedWage'] = train['WeeksWorked']
+    return train
 
 def main():
     train, test = importData()
@@ -122,15 +233,21 @@ def main():
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
 
-    train, test = binningAge(train, test)
-    train, test = binningWeeksWorked(train, test)
+    # train, test = binningAge(train, test)
+    # train, test = binningWeeksWorked(train, test)
+
+    # try and predict wages that are currently 0 and see what affect it has on acc
+    # train, test = regressWage(train, test)
+
+    # doing adaptive binning, take quantile values on train non-zero
+    # train, test = binningWage(train, test)
+
 
     # setting up training params
     y_data = train['Target']
     x_data = train.drop(['Target'], axis=1)
     y_test = test['Target']
     x_test = test.drop(['Target'], axis=1)
-
 
     lightGBMModel(x_data, y_data, x_test, y_test)
 

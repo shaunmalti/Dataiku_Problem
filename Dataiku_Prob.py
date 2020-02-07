@@ -356,8 +356,6 @@ def shapRanking(x_data, y_data):
     train_x, valid_x, train_y, valid_y = train_test_split(
         x_data, y_data, test_size=0.33, random_state=42)
 
-    train_cols = x_data.columns.tolist()
-
     train_data = lgb.Dataset(train_x, label=train_y)
     valid_data = lgb.Dataset(valid_x, label=valid_y)
 
@@ -382,14 +380,30 @@ def shapRanking(x_data, y_data):
     explainer = shap.TreeExplainer(lgb_model).shap_values(valid_x)
     shap.summary_plot(explainer[1], valid_x)
     plt.show()
-    shap.dependence_plot('Age', explainer[1], valid_x)
+
+    shap.dependence_plot('Wage', explainer[1], valid_x)
     plt.show()
-    shap.dependence_plot('WeeksWorked', explainer[1], valid_x)
-    plt.show()
-    shap.dependence_plot('Sex', explainer[1], valid_x)
-    plt.show()
-    shap.dependence_plot('Education', explainer[1], valid_x)
-    plt.show()
+
+    # for wage shapley
+    # shap.dependence_plot('NumWorkersEmployer', explainer[1], valid_x)
+    # plt.show()
+    #
+    # shap.dependence_plot('TaxFilerStat', explainer[1], valid_x)
+    # plt.show()
+    #
+    # shap.dependence_plot('HouseLive1Yr', explainer[1], valid_x)
+    # plt.show()
+    #
+    # shap.dependence_plot('OccupationCode', explainer[1], valid_x)
+    # plt.show()
+
+    # for target shapley vals
+    # shap.dependence_plot('WeeksWorked', explainer[1], valid_x)
+    # plt.show()
+    # shap.dependence_plot('Sex', explainer[1], valid_x)
+    # plt.show()
+    # shap.dependence_plot('Education', explainer[1], valid_x)
+    # plt.show()
 
 def lightGBMModel(x_data, y_data, x_test, y_test):
     # using lightgbm model to compare accuracy with normal rand forest
@@ -409,7 +423,6 @@ def lightGBMModel(x_data, y_data, x_test, y_test):
         'bagging_fraction': 0.8,
         'bagging_freq': 5,
         'verbose': 0,
-        'max_depth': 28,
         'num_estimators': 800
     }
 
