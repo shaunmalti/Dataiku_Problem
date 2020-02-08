@@ -286,11 +286,11 @@ def main():
     lightGBMModel(x_data, y_data, x_test, y_test)
 
     kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=123)
-
-    reg = LogisticRegression(penalty='l1', max_iter=500)
+    reg = LogisticRegression(penalty='l1', max_iter=500, random_state=123)
     cross_val_score(reg, x_data, y_data, cv=kf)
     preds = cross_val_predict(reg, x_test, y_test, cv=kf)
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
+    print('AOC ROC ', roc_auc_score(y_test.values, cross_val_predict(reg, x_test, y_test, cv=kf, method='predict_proba')[:,1]))
     decTree(x_data, y_data, x_test, y_test)
     randFor(x_data, y_data, x_test, y_test)
 
@@ -354,26 +354,30 @@ def lightGBMModel(x_data, y_data, x_test, y_test):
     y_prob = gbm.predict(x_test.values, num_iteration=gbm.best_iteration)
     y_pred = [round(x) for x in y_prob]
     print('Accuracy LGBM: ', (accuracy_score(y_pred, y_test)) * 100)
+    print('AOC ROC ', roc_auc_score(y_test.values, y_prob))
 
 def logReg(x_data, y_data, x_test, y_test):
-    reg = LogisticRegression(solver='lbfgs')
+    reg = LogisticRegression(solver='lbfgs', random_state=123)
     reg.fit(x_data, y_data)
     preds = reg.predict(x_test)
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
+    print('AOC ROC ', roc_auc_score(y_test.values, roc_auc_score(y_test.values, reg.predict_proba(x_test)[:,1])))
 
 def decTree(x_data, y_data, x_test, y_test):
-    d_t = DecisionTreeClassifier()
+    d_t = DecisionTreeClassifier(random_state=123)
     d_t.fit(x_data, y_data)
     preds = d_t.predict(x_test)
     print('Accuracy DT Class: ', (accuracy_score(preds, y_test)) * 100)
+    print('AOC ROC ', roc_auc_score(y_test.values, d_t.predict_proba(x_test)[:,1]))
 
 def randFor(x_data, y_data, x_test, y_test):
     # final impl with random forests
     rf = RandomForestClassifier(n_estimators=800, min_samples_split=10, min_samples_leaf=2,
-                           max_features='sqrt', max_depth=28, bootstrap=False)
+                           max_features='sqrt', max_depth=28, bootstrap=False, random_state=123)
     rf.fit(x_data, y_data)
     preds = rf.predict(x_test)
     print('Accuracy Rand For: ', (accuracy_score(preds, y_test)) * 100)
+    print('AOC ROC ', roc_auc_score(y_test.values, rf.predict_proba(x_test)[:,1]))
 
 
 if __name__ == '__main__':
