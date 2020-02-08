@@ -746,3 +746,11 @@ After this the same was done, but this time binning the resultant wage predictio
 | 94.599               | 92.768       | 95.26       | 95.439       |
 
 Loss of information for tree based models produces slight losses in accuracy.
+
+## Adding L1 Regularisation to Logistic Regression
+
+| Logistic Regression |
+|---------------------|
+| 94.751               |
+
+Produces the best Logistic Regression result seen so far!
