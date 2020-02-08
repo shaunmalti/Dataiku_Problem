@@ -690,29 +690,6 @@ These produced the following results:
 
 Slight improvements, but improvements nonetheless. 
 
-## Further Work
-
-The results shown here are quite positive, but at the same time they can be improved on. Following are some further steps 
-that can be taken to improve the project overall:
-
-* A greater effort at feature engineering, creating new features and possibly also reducing features to carry more 
-information.
-* A greater understanding of the underlying statistics used to define feature importance, which also contributes to 
-the previous point.
-* Looking at other models to solve the problem (neural networks, SVM)
-* Taking greater care to plan solving the problem from before hand. I.E. Revisiting feature selection repeatedly throughout 
-the project does not help.
-
-### Edit - More Further Work
-
-* Use pred to fill in missing values, some form of regression? - done for wage
-* Tune xgboost and lightgbm, was not done due to the time it would take - Random Forest hyperparameter tuning took 
-around 7 hours.
-* Log transform of continuous variables to reduce skew and make more normally distributed. - done
-* One hot some categorical vars to test.
-* Pivot to create new feature, wage bin as column name then number of weeks worked in column 
-* Adaptive binning via df.quantile() to get corresponding quant list 
-
 ## Using a model to predict 0 values and use them during training (Wage)
 
 ![image](./plots/wage_weeksworked_facetgrid.png)
@@ -754,3 +731,86 @@ Loss of information for tree based models produces slight losses in accuracy.
 | 94.751               |
 
 Produces the best Logistic Regression result seen so far!
+
+## Revising Correlation Graphs
+
+One of the assumptions for logistic regression is that independent variables should also be independent of eachother. Taking 
+this into consideration and going back to the original correlation plot and the shap feature importance graph, we can see how 
+several of the most important features are highly correlated to others within the dataset. An example of this is how the 
+`Age` feature is highly correlated to `FamMembersU18` and `VeteranBen`.
+
+
+When viewing this, the first solution that was tried was to remove the highly correlated non-important features (
+in this case `FamMembersU18` and `VeteranBen`), which produced the following result (together with L1 reg.):
+
+| Logistic Regression |
+|---------------------|
+| 94.755               |
+
+The best logistic regression accuracy seen till now!
+
+What would happen if all highly correlated features from both `Age` (`FamMembersU18`, `VeteranBen`) and `WeeksWorked` (`IndustryCode`, `OccupationCode`, `NumWorkersEmployer`), 
+the highest scoring features from the shapley summary?
+
+| Logistic Regression |
+|---------------------|
+| 94.603               |
+
+Removing so much information leads to a loss in accuracy.
+
+An alternative to this was to perform some form of dimensionality reduction, so as to end up with 1 component as opposed 
+to 3 features (with respect to `Age` and its highly correlated features). Due to their different types, Multiple Factor 
+Analysis was used through python's `prince` library. This produced the following result (together with L1 reg.):
+
+| Logistic Regression |
+|---------------------|
+| 94.686               |
+
+Not as good as just dropping the columns.
+
+## Revisiting Scaling for Logistic Regression
+
+Now, due to the recent addition of L1 normalisation, all features were scaled to the range -1,1 which lead to the following 
+result:
+
+| Logistic Regression |
+|---------------------|
+| 94.764              |
+
+The best result for logistic regression so far.
+
+Rerunning this but this time removing the highly correlated features w.r.t. age produces:
+
+## Introducing Stratified KFolds
+
+Now the normal `KFolds` training method was swapped with sklearn's `StratifiedKFolds` so as to preserve the ratio of 
+class occurrences within each fold.  
+
+| Logistic Regression |
+|---------------------|
+| 94.767              |
+
+A marginal increase, but another slight improvement on the best Logistic Regression accuracy that has been seen.
+
+## Further Work
+
+The results shown here are quite positive, but at the same time they can be improved on. Following are some further steps 
+that can be taken to improve the project overall:
+
+* A greater effort at feature engineering, creating new features and possibly also reducing features to carry more 
+information.
+* A greater understanding of the underlying statistics used to define feature importance, which also contributes to 
+the previous point.
+* Looking at other models to solve the problem (neural networks, SVM)
+* Taking greater care to plan solving the problem from before hand. I.E. Revisiting feature selection repeatedly throughout 
+the project does not help.
+
+### Edit - More Further Work
+
+* Use pred to fill in missing values, some form of regression? - done for wage
+* Tune xgboost and lightgbm, was not done due to the time it would take - Random Forest hyperparameter tuning took 
+around 7 hours.
+* Log transform of continuous variables to reduce skew and make more normally distributed. - done
+* One hot some categorical vars to test.
+* Pivot to create new feature, wage bin as column name then number of weeks worked in column 
+* Adaptive binning via df.quantile() to get corresponding quant list - done

@@ -7,9 +7,9 @@ from sklearn.preprocessing import LabelEncoder, PolynomialFeatures, MinMaxScaler
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, cross_val_predict, KFold
+from sklearn.model_selection import train_test_split, cross_val_score, cross_val_predict, KFold, StratifiedKFold
 
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn import metrics
 from Dataiku_Prob import shapRanking
 
@@ -17,6 +17,7 @@ from Dataiku_Prob import shapRanking
 import lightgbm as lgb
 pd.set_option('display.max_columns', 50)
 from sklearn.utils import resample
+import prince
 
 
 def convertNominalFeatures(data):
@@ -226,12 +227,43 @@ def pivotFeatureWW(train):
     train.loc[(train['WeeksWorked'] >= 0) & (train['WeeksWorked'] < 10), 'WeeksWorkedWage'] = train['WeeksWorked']
     return train
 
+def doFAMD(data):
+    reduceAge = ['Age', 'FamMembersU18', 'VeteranBen']
+    for datum in data:
+        trainToReduce = datum[reduceAge]
+        famd = prince.FAMD(
+            n_components=1,
+            n_iter=3,
+            copy=True,
+            check_input=True,
+            engine='auto',
+            random_state=123
+        )
+        toReturn = famd.fit_transform(trainToReduce)
+        scaler = MinMaxScaler()
+        toReturn = scaler.fit_transform(toReturn.values.reshape(-1,1))
+        datum['AgeFamVet'] = toReturn
+        datum.drop(reduceAge, axis=1, inplace=True)
+    return data[0], data[1]
+
+
+def scaleAll(x_data, x_test):
+    for col in x_data.columns.values:
+        scaler = MinMaxScaler()
+        x_data[col] = scaler.fit_transform(x_data[col].values.reshape(-1, 1))
+        x_test[col] = scaler.fit_transform(x_test[col].values.reshape(-1, 1))
+    return x_data, x_test
+
+
 def main():
     train, test = importData()
+
+    # train, test = doFAMD([train, test])
 
     train, test = dropUnneeded([train, test])
     train, test = replaceQMarks([train, test])
     train, test = convertNominalFeatures([train, test])
+
 
     # train, test = binningAge(train, test)
     # train, test = binningWeeksWorked(train, test)
@@ -242,21 +274,23 @@ def main():
     # doing adaptive binning, take quantile values on train non-zero
     # train, test = binningWage(train, test)
 
-
     # setting up training params
     y_data = train['Target']
     x_data = train.drop(['Target'], axis=1)
     y_test = test['Target']
     x_test = test.drop(['Target'], axis=1)
 
+    # scale when doing regularisation in log reg
+    # x_data, x_test = scaleAll(x_data, x_test)
+
     lightGBMModel(x_data, y_data, x_test, y_test)
 
-    kf = KFold(n_splits=10, shuffle=True, random_state=123)
+    kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=123)
+
     reg = LogisticRegression(penalty='l1', max_iter=500)
     cross_val_score(reg, x_data, y_data, cv=kf)
     preds = cross_val_predict(reg, x_test, y_test, cv=kf)
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)
-
     decTree(x_data, y_data, x_test, y_test)
     randFor(x_data, y_data, x_test, y_test)
 
