@@ -286,7 +286,7 @@ def main():
     lightGBMModel(x_data, y_data, x_test, y_test)
 
     kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=123)
-    reg = LogisticRegression(penalty='l1', max_iter=500, random_state=123)
+    reg = LogisticRegression(penalty='l2', max_iter=500, random_state=123)
     cross_val_score(reg, x_data, y_data, cv=kf)
     preds = cross_val_predict(reg, x_test, y_test, cv=kf)
     print('Accuracy Logistic Reg: ', (accuracy_score(preds, y_test)) * 100)

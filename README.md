@@ -792,6 +792,14 @@ class occurrences within each fold.
 
 A marginal increase, but another slight improvement on the best Logistic Regression accuracy that has been seen.
 
+## L2 Regularisation for Logistic Regression
+
+Changed regularisation from L1 to L2 for logistic regression, it produced the following result.
+
+| Logistic Regression |
+|---------------------|
+| 94.773              |
+
 ## Further Work
 
 The results shown here are quite positive, but at the same time they can be improved on. Following are some further steps 
